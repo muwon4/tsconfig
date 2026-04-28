@@ -1,0 +1,605 @@
+
+--------------------------------------------------------------------------------
+STEP 1 — Start mongosh and create the database
+--------------------------------------------------------------------------------
+
+mongosh
+
+use studentDB
+
+--------------------------------------------------------------------------------
+OPERATION 1 — Insert 3 student documents
+--------------------------------------------------------------------------------
+
+db.students.insertMany([
+  {
+    student_name:       "Alice",
+    student_percentage: 85,
+    student_dob:        new Date("2000-03-15"),
+    student_department: "Computer Science"
+  },
+  {
+    student_name:       "Bob",
+    student_percentage: 72,
+    student_dob:        new Date("2001-07-22"),
+    student_department: "Mechanical"
+  },
+  {
+    student_name:       "Charlie",
+    student_percentage: 88,
+    student_dob:        new Date("2000-11-05"),
+    student_department: "Computer Science"
+  }
+])
+
+
+--------------------------------------------------------------------------------
+OPERATION 2 — Display students with percentage > 80 AND < 90
+--------------------------------------------------------------------------------
+
+db.students.find({
+  student_percentage: { $gt: 80, $lt: 90 }
+})
+
+ 
+
+--------------------------------------------------------------------------------
+OPERATION 3 — Display all student names in ascending order
+             Project only name and dob (hide other fields)
+--------------------------------------------------------------------------------
+
+db.students.find(
+  {},
+  { student_name: 1, student_dob: 1, _id: 0 }
+).sort({ student_name: 1 })
+
+EXPLANATION:
+  First  { }          = no filter condition (get ALL students)
+  Second { }          = projection (which fields to show)
+    student_name: 1   = SHOW this field
+    student_dob:  1   = SHOW this field
+    _id: 0            = HIDE the _id field
+  .sort({ field: 1 }) = 1 means ASCENDING, -1 means DESCENDING
+
+EXPECTED OUTPUT:
+  { student_name: 'Alice',   student_dob: ISODate("2000-03-15") }
+  { student_name: 'Bob',     student_dob: ISODate("2001-07-22") }
+  { student_name: 'Charlie', student_dob: ISODate("2000-11-05") }
+
+--------------------------------------------------------------------------------
+OPERATION 4 — Update student percentage of student name "Alice"
+--------------------------------------------------------------------------------
+
+db.students.updateOne(
+  { student_name: "Alice" },
+  { $set: { student_percentage: 92 } }
+)
+
+EXPLANATION:
+  First  { }  = filter — find the document where name is Alice
+  Second { }  = what to change — use $set to update a field value
+  $set        = updates only the mentioned field, leaves rest unchanged
+
+EXPECTED OUTPUT:
+  { acknowledged: true, matchedCount: 1, modifiedCount: 1 }
+
+VERIFY the update:
+  db.students.find({ student_name: "Alice" })
+
+--------------------------------------------------------------------------------
+OPERATION 5 — Display highest percentage of each department
+             (uses aggregation + grouping)
+--------------------------------------------------------------------------------
+
+db.students.aggregate([
+  {
+    $group: {
+      _id:            "$student_department",
+      highestMarks:   { $max: "$student_percentage" }
+    }
+  }
+])
+
+EXPLANATION:
+  aggregate() = used for grouping, calculations, complex queries
+  $group      = groups documents by a field (like GROUP BY in SQL)
+  _id         = the field to group by (here: department)
+  $max        = finds the maximum value in the group
+
+EXPECTED OUTPUT:
+  { _id: 'Computer Science', highestMarks: 92 }
+  { _id: 'Mechanical',       highestMarks: 72 }
+
+NOTE: Alice's percentage is now 92 (we updated it in Operation 4)
+
+--------------------------------------------------------------------------------
+OPERATION 6 — Create an index on student_name field in sorted order
+--------------------------------------------------------------------------------
+
+db.students.createIndex({ student_name: 1 })
+
+EXPLANATION:
+  createIndex() = creates an index to make searches faster
+  { student_name: 1 } = create index on student_name in ASCENDING order
+  { student_name: -1} = would create index in DESCENDING order
+  Index = like a book's index — helps find data quickly without
+          scanning every document
+
+EXPECTED OUTPUT:
+  student_name_1
+
+VERIFY index was created:
+  db.students.getIndexes()
+
+--------------------------------------------------------------------------------
+OPERATION 7 — Find students born in the year 2000
+--------------------------------------------------------------------------------
+
+db.students.find({
+  student_dob: {
+    $gte: new Date("2000-01-01"),
+    $lte: new Date("2000-12-31")
+  }
+})
+
+ 
+
+================================================================================
+QUESTION 2 — Pharmacy Collection using Node.js
+================================================================================
+
+TASK:
+  Create a pharmacy collection. Each document has medicine_name and expiry_date.
+  Write Node.js code to:
+  1. Insert a new pharmacy document
+  2. Update expiry date of medicine with name "crocin" and display result
+
+--------------------------------------------------------------------------------
+SETUP — Run in VS Code terminal first
+--------------------------------------------------------------------------------
+
+mkdir pharmacy-app
+cd pharmacy-app
+npm init -y
+npm install mongodb
+
+Then create a file called: pharmacy.js
+
+--------------------------------------------------------------------------------
+FILE: pharmacy.js  (Complete Node.js code)
+--------------------------------------------------------------------------------
+
+// Import MongoDB client
+const { MongoClient } = require('mongodb');
+
+// MongoDB connection string
+const url    = 'mongodb://localhost:27017';
+const client = new MongoClient(url);
+
+async function runPharmacyOperations() {
+  try {
+
+    // ---- CONNECT TO MONGODB ----
+    await client.connect();
+    console.log('Connected to MongoDB successfully!');
+
+    // ---- SELECT DATABASE AND COLLECTION ----
+    const db         = client.db('pharmacyDB');
+    const collection = db.collection('pharmacy');
+
+    // ================================================
+    // OPERATION 1: Insert a new pharmacy document
+    // ================================================
+    console.log('\n--- OPERATION 1: Inserting new medicine ---');
+
+    const newMedicine = {
+      medicine_name: 'Paracetamol 500mg',
+      expiry_date:   new Date('2026-12-31')
+    };
+
+    const insertResult = await collection.insertOne(newMedicine);
+    console.log('Medicine inserted successfully!');
+    console.log('Inserted ID:', insertResult.insertedId);
+
+    // Also insert crocin so we can update it in Operation 2
+    await collection.insertOne({
+      medicine_name: 'crocin',
+      expiry_date:   new Date('2025-06-30')
+    });
+    console.log('Crocin also inserted for update operation.');
+
+    // ================================================
+    // OPERATION 2: Update expiry date of "crocin"
+    // ================================================
+    console.log('\n--- OPERATION 2: Updating expiry date of crocin ---');
+
+    const updateResult = await collection.updateOne(
+      { medicine_name: 'crocin' },              // Filter: find crocin
+      { $set: { expiry_date: new Date('2027-03-15') } }  // Update its date
+    );
+
+    console.log('Documents matched :', updateResult.matchedCount);
+    console.log('Documents modified:', updateResult.modifiedCount);
+
+    // ================================================
+    // DISPLAY: Show all updated documents
+    // ================================================
+    console.log('\n--- All medicines after update ---');
+
+    const allMedicines = await collection.find({}).toArray();
+
+    allMedicines.forEach(function(medicine, index) {
+      console.log('\nMedicine ' + (index + 1) + ':');
+      console.log('  Name       :', medicine.medicine_name);
+      console.log('  Expiry Date:', medicine.expiry_date.toDateString());
+      console.log('  ID         :', medicine._id);
+    });
+
+  } catch (error) {
+    console.error('Error occurred:', error);
+
+  } finally {
+    // Always close connection
+    await client.close();
+    console.log('\nMongoDB connection closed.');
+  }
+}
+
+// Run the function
+runPharmacyOperations();
+
+--------------------------------------------------------------------------------
+HOW TO RUN:
+  node pharmacy.js
+
+EXPECTED OUTPUT:
+  Connected to MongoDB successfully!
+
+  --- OPERATION 1: Inserting new medicine ---
+  Medicine inserted successfully!
+  Inserted ID: 65f3a2b1c4e8d90012345678
+  Crocin also inserted for update operation.
+
+  --- OPERATION 2: Updating expiry date of crocin ---
+  Documents matched : 1
+  Documents modified: 1
+
+  --- All medicines after update ---
+
+  Medicine 1:
+    Name       : Paracetamol 500mg
+    Expiry Date: Thu Dec 31 2026
+
+  Medicine 2:
+    Name       : crocin
+    Expiry Date: Sat Mar 15 2027   <-- Updated from 2025 to 2027
+--------------------------------------------------------------------------------
+
+================================================================================
+QUESTION 3 — Movie Database: Find movies with rating > 4.5
+================================================================================
+
+TASK:
+  A movie database stores title, director, rating, and genre.
+  Write a MongoDB query to find movies with rating > 4.5 and display results.
+
+--------------------------------------------------------------------------------
+STEP 1 — Start mongosh and set up database
+--------------------------------------------------------------------------------
+
+mongosh
+
+use movieDB
+
+--------------------------------------------------------------------------------
+STEP 2 — Insert sample movie data (so we have something to query)
+--------------------------------------------------------------------------------
+
+db.movies.insertMany([
+  { title: "Inception",       director: "Christopher Nolan", rating: 8.8, genre: "Sci-Fi"  },
+  { title: "The Dark Knight", director: "Christopher Nolan", rating: 9.0, genre: "Action"  },
+  { title: "Twilight",        director: "Catherine Hardwick",rating: 3.7, genre: "Romance" },
+  { title: "Interstellar",    director: "Christopher Nolan", rating: 8.6, genre: "Sci-Fi"  },
+  { title: "Cats",            director: "Tom Hooper",        rating: 2.8, genre: "Musical" },
+  { title: "Avengers",        director: "Russo Brothers",    rating: 8.4, genre: "Action"  }
+])
+
+--------------------------------------------------------------------------------
+STEP 3 — THE MAIN QUERY: Find movies with rating > 4.5
+--------------------------------------------------------------------------------
+
+db.movies.find({ rating: { $gt: 4.5 } })
+
+EXPLANATION:
+  db.movies       = the collection named "movies"
+  .find()         = search for documents
+  { rating: ... } = filter on the rating field
+  $gt: 4.5        = only documents where rating is GREATER THAN 4.5
+
+EXPECTED OUTPUT:
+  { title: 'Inception',       director: 'Christopher Nolan', rating: 8.8, genre: 'Sci-Fi' }
+  { title: 'The Dark Knight', director: 'Christopher Nolan', rating: 9.0, genre: 'Action' }
+  { title: 'Interstellar',    director: 'Christopher Nolan', rating: 8.6, genre: 'Sci-Fi' }
+  { title: 'Avengers',        director: 'Russo Brothers',    rating: 8.4, genre: 'Action' }
+
+  Twilight (3.7) and Cats (2.8) are NOT shown.
+
+--------------------------------------------------------------------------------
+  
+================================================================================
+                    GENERIC QUERY GUIDE FOR ANY EXAM QUESTION
+================================================================================
+
+This section gives you TEMPLATES. Just replace the words in CAPITALS
+with your actual collection name, field names, and values.
+
+================================================================================
+TEMPLATE 1 — CREATE DATABASE AND COLLECTION
+================================================================================
+
+mongosh
+use YOUR_DATABASE_NAME
+
+-- Collection is created automatically when you insert first document --
+
+================================================================================
+TEMPLATE 2 — INSERT DOCUMENTS
+================================================================================
+
+-- Insert ONE document --
+db.COLLECTION_NAME.insertOne({
+  field1: "value1",
+  field2: 100,
+  field3: new Date("2025-12-31"),
+  field4: "value4"
+})
+
+-- Insert MANY documents --
+db.COLLECTION_NAME.insertMany([
+  { field1: "value1", field2: 100, field3: new Date("2025-01-01") },
+  { field1: "value2", field2: 200, field3: new Date("2026-06-15") },
+  { field1: "value3", field2: 300, field3: new Date("2027-03-20") }
+])
+
+DATA TYPE GUIDE:
+  String  ->  "Alice"
+  Number  ->  85
+  Date    ->  new Date("YYYY-MM-DD")
+  Boolean ->  true or false
+  Array   ->  ["item1", "item2"]
+
+================================================================================
+TEMPLATE 3 — FIND / READ DOCUMENTS
+================================================================================
+
+-- Find ALL documents --
+db.COLLECTION_NAME.find()
+
+-- Find with a condition --
+db.COLLECTION_NAME.find({ FIELD_NAME: VALUE })
+
+-- Find with greater than condition --
+db.COLLECTION_NAME.find({ FIELD_NAME: { $gt: VALUE } })
+
+-- Find with less than condition --
+db.COLLECTION_NAME.find({ FIELD_NAME: { $lt: VALUE } })
+
+-- Find with RANGE (greater than AND less than) --
+db.COLLECTION_NAME.find({ FIELD_NAME: { $gt: VALUE1, $lt: VALUE2 } })
+
+-- Find with TWO conditions (AND) --
+db.COLLECTION_NAME.find({
+  FIELD1: VALUE1,
+  FIELD2: VALUE2
+})
+
+-- Find with OR condition --
+db.COLLECTION_NAME.find({
+  $or: [
+    { FIELD1: VALUE1 },
+    { FIELD2: VALUE2 }
+  ]
+})
+
+-- Find and show only SPECIFIC FIELDS (projection) --
+db.COLLECTION_NAME.find(
+  { CONDITION_FIELD: VALUE },
+  { FIELD_TO_SHOW_1: 1, FIELD_TO_SHOW_2: 1, _id: 0 }
+)
+
+-- Find sorted ASCENDING --
+db.COLLECTION_NAME.find().sort({ FIELD_NAME: 1 })
+
+-- Find sorted DESCENDING --
+db.COLLECTION_NAME.find().sort({ FIELD_NAME: -1 })
+
+-- Find with condition + sort --
+db.COLLECTION_NAME.find({ FIELD: { $gt: VALUE } }).sort({ FIELD: -1 })
+
+-- Find ONE document only --
+db.COLLECTION_NAME.findOne({ FIELD_NAME: VALUE })
+
+-- Count documents matching a condition --
+db.COLLECTION_NAME.countDocuments({ FIELD_NAME: { $gt: VALUE } })
+
+================================================================================
+TEMPLATE 4 — UPDATE DOCUMENTS
+================================================================================
+
+-- Update ONE document --
+db.COLLECTION_NAME.updateOne(
+  { FILTER_FIELD: FILTER_VALUE },
+  { $set: { FIELD_TO_UPDATE: NEW_VALUE } }
+)
+
+-- Update MANY documents --
+db.COLLECTION_NAME.updateMany(
+  { FILTER_FIELD: FILTER_VALUE },
+  { $set: { FIELD_TO_UPDATE: NEW_VALUE } }
+)
+
+-- Update multiple fields at once --
+db.COLLECTION_NAME.updateOne(
+  { FILTER_FIELD: FILTER_VALUE },
+  { $set: {
+      FIELD1: NEW_VALUE1,
+      FIELD2: NEW_VALUE2
+    }
+  }
+)
+
+-- Add a brand new field to a document --
+db.COLLECTION_NAME.updateOne(
+  { FILTER_FIELD: FILTER_VALUE },
+  { $set: { NEW_FIELD_NAME: VALUE } }
+)
+
+================================================================================
+TEMPLATE 5 — DELETE DOCUMENTS
+================================================================================
+
+-- Delete ONE document --
+db.COLLECTION_NAME.deleteOne({ FIELD_NAME: VALUE })
+
+-- Delete MANY documents matching a condition --
+db.COLLECTION_NAME.deleteMany({ FIELD_NAME: { $lt: VALUE } })
+
+-- Delete ALL documents in a collection --
+db.COLLECTION_NAME.deleteMany({})
+
+-- Delete the entire collection --
+db.COLLECTION_NAME.drop()
+
+-- Delete the entire database --
+db.dropDatabase()
+
+================================================================================
+TEMPLATE 6 — AGGREGATION (grouping, max, min, avg, count)
+================================================================================
+
+This is used when exam asks:
+  "Find highest/lowest/average value of each group/department/category"
+
+-- Find MAXIMUM value grouped by a field --
+db.COLLECTION_NAME.aggregate([
+  {
+    $group: {
+      _id:          "$GROUP_BY_FIELD",
+      highestValue: { $max: "$NUMERIC_FIELD" }
+    }
+  }
+])
+
+-- Find MINIMUM value grouped by a field --
+db.COLLECTION_NAME.aggregate([
+  {
+    $group: {
+      _id:         "$GROUP_BY_FIELD",
+      lowestValue: { $min: "$NUMERIC_FIELD" }
+    }
+  }
+])
+
+-- Find AVERAGE value grouped by a field --
+db.COLLECTION_NAME.aggregate([
+  {
+    $group: {
+      _id:          "$GROUP_BY_FIELD",
+      averageValue: { $avg: "$NUMERIC_FIELD" }
+    }
+  }
+])
+
+-- Count documents in each group --
+db.COLLECTION_NAME.aggregate([
+  {
+    $group: {
+      _id:   "$GROUP_BY_FIELD",
+      count: { $sum: 1 }
+    }
+  }
+])
+
+-- Filter THEN group (like WHERE + GROUP BY in SQL) --
+db.COLLECTION_NAME.aggregate([
+  { $match: { FIELD: { $gt: VALUE } } },   // filter first
+  {
+    $group: {
+      _id:          "$GROUP_BY_FIELD",
+      highestValue: { $max: "$NUMERIC_FIELD" }
+    }
+  }
+])
+
+================================================================================
+TEMPLATE 7 — INDEX
+================================================================================
+
+-- Create index on a field (ascending) --
+db.COLLECTION_NAME.createIndex({ FIELD_NAME: 1 })
+
+-- Create index on a field (descending) --
+db.COLLECTION_NAME.createIndex({ FIELD_NAME: -1 })
+
+-- Create index on MULTIPLE fields --
+db.COLLECTION_NAME.createIndex({ FIELD1: 1, FIELD2: -1 })
+
+-- See all indexes in a collection --
+db.COLLECTION_NAME.getIndexes()
+
+-- Delete a specific index --
+db.COLLECTION_NAME.dropIndex({ FIELD_NAME: 1 })
+
+================================================================================
+TEMPLATE 8 — DATE QUERIES
+================================================================================
+
+-- Find documents in a specific YEAR --
+db.COLLECTION_NAME.find({
+  DATE_FIELD: {
+    $gte: new Date("YEAR-01-01"),
+    $lte: new Date("YEAR-12-31")
+  }
+})
+
+-- Find documents BEFORE a date --
+db.COLLECTION_NAME.find({
+  DATE_FIELD: { $lt: new Date("YYYY-MM-DD") }
+})
+
+-- Find documents AFTER a date --
+db.COLLECTION_NAME.find({
+  DATE_FIELD: { $gt: new Date("YYYY-MM-DD") }
+})
+
+================================================================================
+COMPLETE OPERATORS CHEAT SHEET
+================================================================================
+
+COMPARISON OPERATORS:
+  $gt   = greater than           { field: { $gt: 10 } }
+  $gte  = greater than or equal  { field: { $gte: 10 } }
+  $lt   = less than              { field: { $lt: 10 } }
+  $lte  = less than or equal     { field: { $lte: 10 } }
+  $eq   = equal to               { field: { $eq: 10 } }
+  $ne   = not equal to           { field: { $ne: 10 } }
+
+LOGICAL OPERATORS:
+  $and  = both conditions true   { $and: [ {f1:v1}, {f2:v2} ] }
+  $or   = any condition true     { $or:  [ {f1:v1}, {f2:v2} ] }
+  $not  = condition is false     { field: { $not: { $gt: 10 } } }
+
+UPDATE OPERATORS:
+  $set  = set/update a field     { $set: { field: value } }
+  $inc  = increment a number     { $inc: { field: 5 } }
+  $push = add to an array        { $push: { field: value } }
+
+AGGREGATION OPERATORS:
+  $max  = maximum value
+  $min  = minimum value
+  $avg  = average value
+  $sum  = total / count
+  $group= group documents
+
+ 
+ 
